@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Document Verification System</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="contract.js"></script>
+</head>
+<body>
+<div class="container">
+
+  <div class="card">
+    <h2>Blockchain Document Verification</h2>
+    <button id="connectBtn">Connect Wallet</button>
+    <p id="walletInfo"></p>
+    <p id="roleInfo"></p>
+  </div>
+
+  <!-- Issuer Panel -->
+  <div class="card" id="issuerPanel" style="display:none;">
+    <h2>Issuer Dashboard</h2>
+    <input type="text" id="holderAddr" placeholder="Holder Address (0x...)">
+    <input type="text" id="docTitle" placeholder="Document Title">
+    <input type="text" id="ipfsCid" placeholder="IPFS CID (optional)">
+    <input type="file" id="fileInputIss">
+    <button onclick="registerDocument()">Register Document</button>
+    <p id="issuerOutput"></p>
+  </div>
+
+  <!-- Holder Panel -->
+  <div class="card" id="holderPanel" style="display:none;">
+    <h2>Holder Dashboard</h2>
+    <div id="holderOutput">Loading...</div>
+  </div>
+
+  <!-- Verifier Panel -->
+  <div class="card" id="verifierPanel" style="display:none;">
+    <h2>Verifier</h2>
+    <input type="file" id="fileInputVer">
+    <button onclick="verifyFile()">Verify File</button>
+    <pre id="verifyOutput"></pre>
+  </div>
+
+</div>
+
+<script>
+let provider, signer, contract, userAddress;
+
+document.getElementById("connectBtn").onclick = async () => {
+  if (!window.ethereum) return alert("Install MetaMask!");
+  provider = new ethers.providers.Web3Provider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  signer = provider.getSigner();
+  userAddress = (await signer.getAddress()).toLowerCase();
+  contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+  document.getElementById("walletInfo").innerText = "Connected: " + userAddress;
+  determineRole();
+};
+
+async function determineRole() {
+  const isIssuer = await contract.issuers(userAddress);
+  const docs = await contract.getDocsByHolder(userAddress).catch(()=>[]);
+  if (isIssuer) {
+    document.getElementById("roleInfo").innerText = "Role: Issuer";
+    document.getElementById("issuerPanel").style.display = "block";
+  } else if (docs.length > 0) {
+    document.getElementById("roleInfo").innerText = "Role: Holder";
+    document.getElementById("holderPanel").style.display = "block";
+    loadHolderDocs();
+  } else {
+    document.getElementById("roleInfo").innerText = "Role: Verifier";
+    document.getElementById("verifierPanel").style.display = "block";
+  }
+}
+
+async function fileHash(file) {
+  const ab = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", ab);
+  return "0x" + Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+async function registerDocument() {
+  const holder = document.getElementById("holderAddr").value.trim();
+  const title = document.getElementById("docTitle").value.trim();
+  const ipfsCid = document.getElementById("ipfsCid").value.trim();
+  const file = document.getElementById("fileInputIss").files[0];
+  if (!ethers.utils.isAddress(holder)) return alert("Invalid holder address");
+  if (!title || !file) return alert("Fill all fields & select file");
+  const hash = await fileHash(file);
+  const signerContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+  const tx = await signerContract.registerDocument(hash, holder, title, ipfsCid);
+  await tx.wait();
+  document.getElementById("issuerOutput").innerText = "✅ Registered document: " + hash;
+}
+
+async function loadHolderDocs() {
+  const hashes = await contract.getDocsByHolder(userAddress);
+  if (!hashes.length) {
+    document.getElementById("holderOutput").innerText = "No documents found.";
+    return;
+  }
+  let html = "<table><tr><th>Title</th><th>Issuer</th><th>IPFS</th><th>Time</th><th>Revoked</th></tr>";
+  for (let h of hashes) {
+    const d = await contract.getDocument(h);
+    html += `<tr>
+      <td>${d.title}</td>
+      <td>${d.issuer}</td>
+      <td>${d.ipfsCid ? `<a href="https://ipfs.io/ipfs/${d.ipfsCid}" target="_blank">View</a>` : "-"}</td>
+      <td>${new Date(d.timestamp*1000).toLocaleString()}</td>
+      <td>${d.revoked}</td>
+    </tr>`;
+  }
+  html += "</table>";
+  document.getElementById("holderOutput").innerHTML = html;
+}
+
+async function verifyFile() {
+  const file = document.getElementById("fileInputVer").files[0];
+  if (!file) return alert("Choose file first");
+  const hash = await fileHash(file);
+  const d = await contract.getDocument(hash);
+  if (d.timestamp.toNumber && d.timestamp.toNumber() === 0) {
+    document.getElementById("verifyOutput").innerText = "❌ Not registered";
+    return;
+  }
+  document.getElementById("verifyOutput").innerText =
+    `✅ Found\nTitle: ${d.title}\nIssuer: ${d.issuer}\nHolder: ${d.holder}\nIPFS: ${d.ipfsCid}\nTimestamp: ${new Date(d.timestamp*1000).toLocaleString()}\nRevoked: ${d.revoked}`;
+}
+</script>
+</body>
+</html>
