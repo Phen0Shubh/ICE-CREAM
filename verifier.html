@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Document Verifier</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  <script src="contract.js"></script>
+</head>
+<body>
+<div class="container">
+
+  <div class="card">
+    <h2>Document Verifier (Public)</h2>
+    <input type="file" id="fileInputVer">
+    <button onclick="verifyDocument()">Verify Document</button>
+    <pre id="verifierOutput"></pre>
+  </div>
+
+</div>
+
+<script>
+const INFURA_URL = "https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID";
+const provider = new ethers.providers.JsonRpcProvider(INFURA_URL);
+const contractRPC = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+
+async function verifyDocument() {
+  const file = document.getElementById("fileInputVer").files[0];
+  if (!file) return alert("Select file");
+
+  const hash = await fileHash(file);
+  try {
+    const d = await contractRPC.getDocument(hash);
+    if (d[6].toString() === "0") {
+      document.getElementById("verifierOutput").innerText = "❌ Document not found on blockchain";
+      return;
+    }
+    document.getElementById("verifierOutput").innerText =
+      `✅ Found!\nTitle: ${d[2]}\nHolder: ${d[3]} (${d[4]})\nIssuer: ${d[0]}\nIPFS: https://gateway.pinata.cloud/ipfs/${d[5]}\nIssued On: ${new Date(d[6]*1000).toLocaleString()}\nStatus: ${d[7] ? "Revoked" : "Active"}`;
+  } catch (e) {
+    console.error(e);
+    document.getElementById("verifierOutput").innerText = "⚠️ Error verifying document";
+  }
+}
+</script>
+</body>
+</html>
