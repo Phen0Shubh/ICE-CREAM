@@ -2,24 +2,26 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Document Verification System</title>
+  <title>Issuer & Holder Dashboard</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
   <script src="contract.js"></script>
 </head>
 <body>
+<header>Document Verification System</header>
 <div class="container">
 
-  <div class="card">
-    <h2>Blockchain Document Verification</h2>
-    <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+  <!-- Wallet Connection -->
+  <div class="section">
+    <h2>Connect Wallet</h2>
+    <button id="connectBtn" onclick="connectWallet()">Login with Wallet</button>
     <p id="walletInfo"></p>
     <p id="roleInfo"></p>
     <button id="logoutBtn" style="display:none;" onclick="logoutWallet()">Logout</button>
   </div>
 
-  <!-- Issuer Panel -->
-  <div class="card" id="issuerPanel" style="display:none;">
+  <!-- Issuer -->
+  <div class="section" id="issuerPanel" style="display:none;">
     <h2>Issuer Dashboard</h2>
     <input type="text" id="holderName" placeholder="Holder Full Name">
     <input type="text" id="enrollNo" placeholder="Enrollment Number">
@@ -28,12 +30,20 @@
     <input type="file" id="fileInputIss">
     <button onclick="registerDocument()">Register Document</button>
     <p id="issuerOutput"></p>
+    <h3>Your Documents</h3>
+    <div id="issuerDocs">No documents</div>
   </div>
 
-  <!-- Holder Panel -->
-  <div class="card" id="holderPanel" style="display:none;">
-    <h2>Holder Dashboard</h2>
-    <div id="holderOutput">Loading...</div>
+  <!-- Holder -->
+  <div class="section" id="holderPanel" style="display:none;">
+    <h2>Holder Documents</h2>
+    <div id="holderOutput">No documents</div>
+  </div>
+
+  <!-- Link to Verifier -->
+  <div class="section">
+    <h2>Verify Documents</h2>
+    <button onclick="location.href='verifier.html'">Go to Verifier Page</button>
   </div>
 
 </div>
@@ -42,7 +52,6 @@
 let provider, signer, contract, userAddress;
 
 async function connectWallet() {
-  if (!window.ethereum) return alert("Install MetaMask!");
   provider = new ethers.providers.Web3Provider(window.ethereum);
   await provider.send("eth_requestAccounts", []);
   signer = provider.getSigner();
@@ -65,22 +74,18 @@ function logoutWallet() {
 }
 
 async function determineRole() {
-  try {
-    const isIssuer = await contract.issuers(userAddress);
-    const docs = await contract.getDocsByHolder(userAddress).catch(()=>[]);
-    if (isIssuer) {
-      document.getElementById("roleInfo").innerText = "Role: Issuer";
-      document.getElementById("issuerPanel").style.display = "block";
-    } else if (docs.length > 0) {
-      document.getElementById("roleInfo").innerText = "Role: Holder";
-      document.getElementById("holderPanel").style.display = "block";
-      loadHolderDocs();
-    } else {
-      document.getElementById("roleInfo").innerText = "Role: No Issuer/Hold docs found";
-    }
-  } catch (e) {
-    console.error(e);
-    alert("Error determining role");
+  const isIssuer = await contract.issuers(userAddress);
+  const docs = await contract.getDocsByHolder(userAddress).catch(()=>[]);
+  if (isIssuer) {
+    document.getElementById("roleInfo").innerText = "Role: Issuer";
+    document.getElementById("issuerPanel").style.display = "block";
+    loadIssuerDocs();
+  } else if (docs.length > 0) {
+    document.getElementById("roleInfo").innerText = "Role: Holder";
+    document.getElementById("holderPanel").style.display = "block";
+    loadHolderDocs();
+  } else {
+    document.getElementById("roleInfo").innerText = "Role: Verifier";
   }
 }
 
@@ -95,42 +100,58 @@ async function registerDocument() {
   if (!title || !holderName || !enrollNo || !file) return alert("Fill all fields");
 
   const hash = await fileHash(file);
-  const PINATA_JWT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJjM2Q0OTk0Yy0yNTM1LTQ1NDUtYmYxYy0zOTI5MmUwNjM3ODAiLCJlbWFpbCI6ImNoYXVoYW5zaHViaDQ1QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiI2NmI5ZWIwZGMxM2JlODI5ZGE5YyIsInNjb3BlZEtleVNlY3JldCI6IjIwMGFlZTY5Njc5ODBlNmYzNTA5M2JmYjRjYjY1MjMzZDVmZTY3YjI2YTIxMTljYjgyNzczNjk2ZTBiMjM4ZDYiLCJleHAiOjE3OTAxNzAyODR9.XcQ7DLm6SJL7-LTlCK7USQX7mP5UaAOUW5p7K_jJKGo
-";
-  const ipfsCid = await uploadToPinata(file, PINATA_JWT);
-
+  const ipfsCid = await uploadToPinata(file, "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VySW5mb3JtYXRpb24iOnsiaWQiOiJjM2Q0OTk0Yy0yNTM1LTQ1NDUtYmYxYy0zOTI5MmUwNjM3ODAiLCJlbWFpbCI6ImNoYXVoYW5zaHViaDQ1QGdtYWlsLmNvbSIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJwaW5fcG9saWN5Ijp7InJlZ2lvbnMiOlt7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6IkZSQTEifSx7ImRlc2lyZWRSZXBsaWNhdGlvbkNvdW50IjoxLCJpZCI6Ik5ZQzEifV0sInZlcnNpb24iOjF9LCJtZmFfZW5hYmxlZCI6ZmFsc2UsInN0YXR1cyI6IkFDVElWRSJ9LCJhdXRoZW50aWNhdGlvblR5cGUiOiJzY29wZWRLZXkiLCJzY29wZWRLZXlLZXkiOiI2NmI5ZWIwZGMxM2JlODI5ZGE5YyIsInNjb3BlZEtleVNlY3JldCI6IjIwMGFlZTY5Njc5ODBlNmYzNTA5M2JmYjRjYjY1MjMzZDVmZTY3YjI2YTIxMTljYjgyNzczNjk2ZTBiMjM4ZDYiLCJleHAiOjE3OTAxNzAyODR9.XcQ7DLm6SJL7-LTlCK7USQX7mP5UaAOUW5p7K_jJKGo");
   const signerContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
   const tx = await signerContract.registerDocument(hash, holder, title, holderName, enrollNo, ipfsCid);
   await tx.wait();
 
-  document.getElementById("issuerOutput").innerText =
-    `✅ Registered!\nHolder: ${holderName} (${enrollNo})\nHash: ${hash}\nIPFS: https://gateway.pinata.cloud/ipfs/${ipfsCid}`;
+  document.getElementById("issuerOutput").innerText = "✅ Document registered!";
+  loadIssuerDocs();
 }
 
 async function loadHolderDocs() {
   const hashes = await contract.getDocsByHolder(userAddress);
-  if (!hashes.length) {
-    document.getElementById("holderOutput").innerText = "No documents found.";
-    return;
-  }
-
-  let html = "<table><tr><th>Title</th><th>Holder</th><th>Enroll No</th><th>Issuer</th><th>IPFS</th><th>Issued On</th><th>Status</th></tr>";
+  let html = "<table><tr><th>Title</th><th>Issuer</th><th>IPFS</th><th>Date</th><th>Status</th></tr>";
   for (let h of hashes) {
     const d = await contract.getDocument(h);
     html += `<tr>
       <td>${d[2]}</td>
-      <td>${d[3]}</td>
-      <td>${d[4]}</td>
       <td>${d[0]}</td>
       <td><a href="https://gateway.pinata.cloud/ipfs/${d[5]}" target="_blank">View</a></td>
-      <td>${new Date(d[6] * 1000).toLocaleString()}</td>
+      <td>${new Date(d[6]*1000).toLocaleString()}</td>
       <td>${d[7] ? "Revoked" : "Active"}</td>
     </tr>`;
   }
   html += "</table>";
   document.getElementById("holderOutput").innerHTML = html;
 }
+
+async function loadIssuerDocs() {
+  const hashes = await contract.getDocsByHolder(userAddress);
+  let html = "<table><tr><th>Title</th><th>Holder</th><th>Enroll No</th><th>IPFS</th><th>Date</th><th>Status</th><th>Action</th></tr>";
+  for (let h of hashes) {
+    const d = await contract.getDocument(h);
+    html += `<tr>
+      <td>${d[2]}</td>
+      <td>${d[3]}</td>
+      <td>${d[4]}</td>
+      <td><a href="https://gateway.pinata.cloud/ipfs/${d[5]}" target="_blank">View</a></td>
+      <td>${new Date(d[6]*1000).toLocaleString()}</td>
+      <td>${d[7] ? "Revoked" : "Active"}</td>
+      <td>${!d[7] ? `<button onclick="revokeDoc('${h}')">Revoke</button>` : ""}</td>
+    </tr>`;
+  }
+  html += "</table>";
+  document.getElementById("issuerDocs").innerHTML = html;
+}
+
+async function revokeDoc(hash) {
+  const signerContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
+  const tx = await signerContract.revokeDocument(hash);
+  await tx.wait();
+  alert("Document revoked!");
+  loadIssuerDocs();
+}
 </script>
 </body>
 </html>
-
