@@ -161,7 +161,6 @@ async function loadIssuerDocs() {
 
 
 async function revokeDoc(hash) {
-  const signerContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
   const tx = await signerContract.revokeDocument(hash);
   await tx.wait();
   alert("Document revoked!");
@@ -170,5 +169,6 @@ async function revokeDoc(hash) {
 </script>
 </body>
 </html>
+
 
 
