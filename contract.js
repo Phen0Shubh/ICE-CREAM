@@ -1,14 +1,22 @@
 // Replace with your deployed contract address
-const CONTRACT_ADDRESS = "0xa307378e19478aFF160b0D7B0f84A1805E8970DF";
+const CONTRACT_ADDRESS = "0xa75aB5f6358CEabBEE5d90B7915BeBD8735D3927";
 
 // Updated ABI (includes holderName + enrollmentNo)
 const ABI = [
+  // Document functions
   "function registerDocument(bytes32 hash, address holder, string title, string holderName, string enrollmentNo, string ipfsCid) public",
+  "function revokeDocument(bytes32 hash) public",
   "function getDocument(bytes32 hash) external view returns (address issuer, address holder, string title, string holderName, string enrollmentNo, string ipfsCid, uint256 timestamp, bool revoked)",
-  "function getDocsByHolder(address) external view returns (bytes32[])",
+
+  // Dashboard helpers
+  "function getDocsByHolder(address holder) external view returns (bytes32[])",
+  "function getDocsByIssuer(address issuer) external view returns (bytes32[])",
+
+  // Issuer management
   "function issuers(address) external view returns (bool)",
-  "function revokeDocument(bytes32 hash) public"
+  "function addIssuer(address issuer) external"
 ];
+
 
 // ---- Utility functions ----
 
@@ -36,3 +44,4 @@ async function uploadToPinata(file, PINATA_JWT) {
   const result = await res.json();
   return result.IpfsHash;
 }
+
