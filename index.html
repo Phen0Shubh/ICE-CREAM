@@ -127,7 +127,7 @@ async function loadHolderDocs() {
 }
 
 async function loadIssuerDocs() {
-  const hashes = await contract.getDocsByHolder(userAddress);
+  const hashes = await contract.getDocsByIssuer(userAddress);
   let html = "<table><tr><th>Title</th><th>Holder</th><th>Enroll No</th><th>IPFS</th><th>Date</th><th>Status</th><th>Action</th></tr>";
   for (let h of hashes) {
     const d = await contract.getDocument(h);
@@ -155,3 +155,4 @@ async function revokeDoc(hash) {
 </script>
 </body>
 </html>
+
