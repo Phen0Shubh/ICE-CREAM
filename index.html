@@ -127,23 +127,38 @@ async function loadHolderDocs() {
 }
 
 async function loadIssuerDocs() {
+  const provider = new ethers.providers.Web3Provider(window.ethereum);
+  const signer = provider.getSigner();
+  const userAddress = await signer.getAddress();
+
+  // ✅ Call getDocsByIssuer instead of getDocsByHolder
   const hashes = await contract.getDocsByIssuer(userAddress);
-  let html = "<table><tr><th>Title</th><th>Holder</th><th>Enroll No</th><th>IPFS</th><th>Date</th><th>Status</th><th>Action</th></tr>";
+
+  const tableBody = document.querySelector("#issuerDocsTable tbody");
+  tableBody.innerHTML = "";
+
   for (let h of hashes) {
     const d = await contract.getDocument(h);
-    html += `<tr>
-      <td>${d[2]}</td>
-      <td>${d[3]}</td>
-      <td>${d[4]}</td>
-      <td><a href="https://gateway.pinata.cloud/ipfs/${d[5]}" target="_blank">View</a></td>
-      <td>${new Date(d[6]*1000).toLocaleString()}</td>
-      <td>${d[7] ? "Revoked" : "Active"}</td>
-      <td>${!d[7] ? `<button onclick="revokeDoc('${h}')">Revoke</button>` : ""}</td>
-    </tr>`;
+
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${d.title}</td>
+      <td>${d.holderName}</td>
+      <td>${d.enrollmentNo}</td>
+      <td>${d.holder}</td>
+      <td><a href="https://ipfs.io/ipfs/${d.ipfsCid}" target="_blank">View</a></td>
+      <td>${new Date(Number(d.timestamp) * 1000).toLocaleString()}</td>
+      <td>${d.revoked ? "❌ Revoked" : "✅ Active"}</td>
+      <td>
+        ${!d.revoked && d.issuer.toLowerCase() === userAddress.toLowerCase() 
+          ? `<button onclick="revokeDoc('${h}')">Revoke</button>` 
+          : ""}
+      </td>
+    `;
+    tableBody.appendChild(row);
   }
-  html += "</table>";
-  document.getElementById("issuerDocs").innerHTML = html;
 }
+
 
 async function revokeDoc(hash) {
   const signerContract = new ethers.Contract(CONTRACT_ADDRESS, ABI, signer);
@@ -155,4 +170,5 @@ async function revokeDoc(hash) {
 </script>
 </body>
 </html>
+
 
